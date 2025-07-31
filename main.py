@@ -16,14 +16,16 @@ openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets 
 
 # App Configuration
 st.set_page_config(page_title="OmniAI Dashboard", layout="wide")
-st.title("🤖 OmniAI: The Autonomous Company Dashboard")
 
-# CSS enhancements
+# Apply Dark Theme CSS
 st.markdown("""
     <style>
-        .reportview-container {
+        body {
             background-color: #0e1117;
             color: #d1d5db;
+        }
+        .reportview-container .main .block-container{
+            padding-top: 2rem;
         }
         .stButton>button {
             background-color: #2563eb;
@@ -34,30 +36,45 @@ st.markdown("""
             background-color: #059669;
             color: white;
         }
+        .stTextInput>div>input {
+            background-color: #1c1f26;
+            color: white;
+        }
     </style>
 """, unsafe_allow_html=True)
 
+st.title("🤖 OmniAI: The Autonomous Company Dashboard")
+
 # Role colours
-role_colors = {
-    "executive": "#FFD700",
-    "engineering": "#1f77b4",
-    "product": "#ff7f0e",
-    "marketing": "#2ca02c",
-    "design": "#9467bd",
-    "project-management": "#8c564b",
-    "studio-operations": "#e377c2",
-    "testing": "#7f7f7f",
-    "sales": "#17becf",
-    "finance": "#bcbd22",
-    "legal": "#d62728",
-    "publicity": "#17becf"
+def get_role_colors():
+    return {
+        "executive": "#FFD700",
+        "engineering": "#1f77b4",
+        "product": "#ff7f0e",
+        "marketing": "#2ca02c",
+        "design": "#9467bd",
+        "project-management": "#8c564b",
+        "studio-operations": "#e377c2",
+        "testing": "#7f7f7f",
+        "sales": "#17becf",
+        "finance": "#bcbd22",
+        "legal": "#d62728",
+        "publicity": "#17becf"
+    }
+
+role_colors = get_role_colors()
+
+# Departments and agents
+agents = {
+    "CEO": "You are the CEO of the company. Respond with strategic insights.",
+    "CTO": "You are the CTO. Answer with technical clarity.",
+    "CFO": "You are the CFO. Give financial advice in professional tone.",
+    "CMO": "You are the CMO. Think like a marketer.",
+    "DevOps": "You are the DevOps engineer. Explain systems and pipelines.",
+    "Product Manager": "You are a product manager. Clarify scope and vision."
 }
 
-chat_log = []
-usage_counter = defaultdict(int)
-
-st.sidebar.header("🧠 Select an AI Agent")
-
+# Sidebar - Language and Agent
 language_map = {
     "English": "en",
     "Spanish": "es",
@@ -67,75 +84,95 @@ language_map = {
     "Arabic": "ar"
 }
 
+st.sidebar.header("🧠 Select an AI Agent")
+agent_name = st.sidebar.selectbox("Agent", list(agents.keys()))
 selected_language_name = st.sidebar.selectbox("🌍 Preferred Language", list(language_map.keys()))
 selected_language_code = language_map[selected_language_name]
 
-st.markdown("#### 🗣️ Enter text, record, or upload your voice below")
-user_query = ""
+# Tabs
+tab1, tab2 = st.tabs(["💬 Chat", "📊 Status"])
+chat_log = []
+usage_counter = defaultdict(int)
 
-audio_bytes = st.audio_recorder("🎤 Record your message (click to start/stop)", format="audio/wav")
+# Chat Tab
+with tab1:
+    st.markdown("#### 🗣️ Enter text or upload your voice below")
 
-uploaded_audio = st.file_uploader("📁 Or upload audio (WAV/MP3/M4A)", type=["wav", "mp3", "m4a"])
+    user_query = ""
+    uploaded_audio = st.file_uploader("📁 Upload audio (WAV/MP3/M4A)", type=["wav", "mp3", "m4a"])
 
-if audio_bytes or uploaded_audio:
-    if audio_bytes:
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-        tmp_file.write(audio_bytes)
-        tmp_path = tmp_file.name
-    else:
+    if uploaded_audio:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
             tmp_file.write(uploaded_audio.read())
             tmp_path = tmp_file.name
 
-    with st.spinner("🧠 Transcribing with Whisper..."):
-        try:
-            transcript = openai.Audio.transcribe(
-                model="whisper-1",
-                file=open(tmp_path, "rb"),
-                response_format="json",
-                language=selected_language_code
-            )
-            user_query = transcript["text"]
-            st.success(f"📝 Transcribed ({selected_language_name}): {user_query}")
-        except Exception as e:
-            st.error(f"❌ Whisper error: {e}")
-
-if not user_query:
-    user_query = st.text_input("💬 Or type your message:", placeholder="e.g. What's the projected revenue this quarter?")
-
-if user_query:
-    st.markdown("---")
-    agent_name = "CFO Bot"
-    role_prompt = "You are a knowledgeable company CFO. Respond in concise business tone."
-    system_prompt = {"role": "system", "content": role_prompt}
-    user_input = {"role": "user", "content": user_query}
-
-    with st.spinner("💡 Generating response..."):
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[system_prompt, user_input],
-                temperature=0.7
-            )
-            reply = response.choices[0].message["content"].strip()
-
-            if selected_language_code != "en":
-                translation = openai.ChatCompletion.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": f"Translate this to {selected_language_name}:"},
-                        {"role": "user", "content": reply}
-                    ],
-                    temperature=0.5
+        with st.spinner("🧠 Transcribing with Whisper..."):
+            try:
+                transcript = openai.Audio.transcribe(
+                    model="whisper-1",
+                    file=open(tmp_path, "rb"),
+                    response_format="json",
+                    language=selected_language_code
                 )
-                reply = translation.choices[0].message["content"].strip()
+                user_query = transcript["text"]
+                st.success(f"📝 Transcribed ({selected_language_name}): {user_query}")
+            except Exception as e:
+                st.error(f"❌ Whisper error: {e}")
 
-            st.markdown(f"**{agent_name}**: {reply}")
-            chat_log.append({"agent": agent_name, "query": user_query, "response": reply, "time": datetime.now()})
-            usage_counter[agent_name] += 1
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
+    if not user_query:
+        user_query = st.text_input("💬 Or type your message:", placeholder="e.g. What’s our deployment success rate?")
 
+    if user_query:
+        st.markdown("---")
+        system_prompt = {"role": "system", "content": agents[agent_name]}
+        user_input = {"role": "user", "content": user_query}
+
+        with st.spinner("💡 Generating response..."):
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[system_prompt, user_input],
+                    temperature=0.7
+                )
+                reply = response.choices[0].message["content"].strip()
+
+                # Translate back if needed
+                if selected_language_code != "en":
+                    translation = openai.ChatCompletion.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": f"Translate this to {selected_language_name}:"},
+                            {"role": "user", "content": reply}
+                        ],
+                        temperature=0.5
+                    )
+                    reply = translation.choices[0].message["content"].strip()
+
+                st.markdown(f"**{agent_name}**: {reply}")
+                chat_log.append({"agent": agent_name, "query": user_query, "response": reply, "time": datetime.now()})
+                usage_counter[agent_name] += 1
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+# Status Page
+with tab2:
+    st.subheader("📊 Live Agent Usage")
+    if usage_counter:
+        df = pd.DataFrame(list(usage_counter.items()), columns=["Agent", "Usage Count"])
+        st.bar_chart(df.set_index("Agent"))
+    else:
+        st.info("No agent usage yet.")
+
+    st.subheader("📜 Chat Log")
+    if chat_log:
+        for item in reversed(chat_log[-5:]):
+            st.markdown(f"- 🕒 {item['time'].strftime('%H:%M:%S')} | **{item['agent']}** → {item['query']}")
+            st.markdown(f"  ↪️ _{item['response']}_")
+    else:
+        st.info("No conversations logged yet.")
+
+# Footer
 st.markdown("""
 ---
 Made with ❤️ by Oti Edema • Powered by OpenAI & Streamlit  
