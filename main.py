@@ -9,10 +9,10 @@ import tempfile
 from io import BytesIO
 import base64
 import soundfile as sf
-from openai import OpenAI
+import openai
 
-# Initialise OpenAI client
-client = OpenAI()
+# Set OpenAI API Key from environment or Streamlit secrets
+openai.api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 
 # App Configuration
 st.set_page_config(page_title="OmniAI Dashboard", layout="wide")
@@ -115,13 +115,13 @@ with tab1:
 
         with st.spinner("🧠 Transcribing with Whisper..."):
             try:
-                transcript = client.audio.transcriptions.create(
+                transcript = openai.Audio.transcribe(
                     model="whisper-1",
                     file=open(tmp_path, "rb"),
                     response_format="json",
                     language=selected_language_code
                 )
-                user_query = transcript.text
+                user_query = transcript["text"]
                 st.success(f"📝 Transcribed ({selected_language_name}): {user_query}")
             except Exception as e:
                 st.error(f"❌ Whisper error: {e}")
@@ -136,7 +136,7 @@ with tab1:
 
         with st.spinner("💡 Generating response..."):
             try:
-                response = client.chat.completions.create(
+                response = openai.ChatCompletion.create(
                     model="gpt-4",
                     messages=[system_prompt, user_input],
                     temperature=0.7
@@ -145,7 +145,7 @@ with tab1:
 
                 # Translate back if needed
                 if selected_language_code != "en":
-                    translation = client.chat.completions.create(
+                    translation = openai.ChatCompletion.create(
                         model="gpt-4",
                         messages=[
                             {"role": "system", "content": f"Translate this to {selected_language_name}:"},
