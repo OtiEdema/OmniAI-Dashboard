@@ -1,9 +1,7 @@
-# v2
 import streamlit as st
 import time
 from datetime import datetime
 from collections import defaultdict
-import openai
 import os
 import random
 import pandas as pd
@@ -11,9 +9,10 @@ import tempfile
 from io import BytesIO
 import base64
 import soundfile as sf
+from openai import OpenAI
 
-# Load OpenAI API Key from secrets or env
-openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
+# Initialise OpenAI client
+client = OpenAI()
 
 # App Configuration
 st.set_page_config(page_title="OmniAI Dashboard", layout="wide")
@@ -65,14 +64,21 @@ def get_role_colors():
 
 role_colors = get_role_colors()
 
-# Departments and agents
+# Expanded Agents and Departments
 agents = {
     "CEO": "You are the CEO of the company. Respond with strategic insights.",
     "CTO": "You are the CTO. Answer with technical clarity.",
     "CFO": "You are the CFO. Give financial advice in professional tone.",
     "CMO": "You are the CMO. Think like a marketer.",
+    "COO": "You are the COO. Streamline operational efficiency.",
+    "Legal Advisor": "You are the legal advisor. Respond with legal clarity.",
+    "Public Relations Officer": "You are the Publicity head. Respond diplomatically.",
     "DevOps": "You are the DevOps engineer. Explain systems and pipelines.",
-    "Product Manager": "You are a product manager. Clarify scope and vision."
+    "Product Manager": "You are a product manager. Clarify scope and vision.",
+    "Sales Director": "You are the Sales Director. Respond to client and market queries.",
+    "QA Engineer": "You are the QA Engineer. Highlight testing methodologies.",
+    "HR Manager": "You are the HR Manager. Be human-centred and policy-driven.",
+    "Customer Support Agent": "You are a helpful and kind support agent."
 }
 
 # Sidebar - Language and Agent
@@ -109,13 +115,13 @@ with tab1:
 
         with st.spinner("🧠 Transcribing with Whisper..."):
             try:
-                transcript = openai.Audio.transcribe(
+                transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=open(tmp_path, "rb"),
                     response_format="json",
                     language=selected_language_code
                 )
-                user_query = transcript["text"]
+                user_query = transcript.text
                 st.success(f"📝 Transcribed ({selected_language_name}): {user_query}")
             except Exception as e:
                 st.error(f"❌ Whisper error: {e}")
@@ -130,16 +136,16 @@ with tab1:
 
         with st.spinner("💡 Generating response..."):
             try:
-                response = openai.ChatCompletion.create(
+                response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[system_prompt, user_input],
                     temperature=0.7
                 )
-                reply = response.choices[0].message["content"].strip()
+                reply = response.choices[0].message.content.strip()
 
                 # Translate back if needed
                 if selected_language_code != "en":
-                    translation = openai.ChatCompletion.create(
+                    translation = client.chat.completions.create(
                         model="gpt-4",
                         messages=[
                             {"role": "system", "content": f"Translate this to {selected_language_name}:"},
@@ -147,7 +153,7 @@ with tab1:
                         ],
                         temperature=0.5
                     )
-                    reply = translation.choices[0].message["content"].strip()
+                    reply = translation.choices[0].message.content.strip()
 
                 st.markdown(f"**{agent_name}**: {reply}")
                 chat_log.append({"agent": agent_name, "query": user_query, "response": reply, "time": datetime.now()})
