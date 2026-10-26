@@ -30,7 +30,7 @@
 ## 🖼️ Live Preview
 
 > Launch the app on Streamlit Cloud:
-> [🔗 Streamlit Deployment (Coming Soon)](https://omni-ai.streamlit.app)
+> [🔗 Streamlit Deployment](https://omniai.streamlit.app)
 
 ---
 
